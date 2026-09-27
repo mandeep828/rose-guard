@@ -1,6 +1,9 @@
 import logging
 import time
+import os
+import threading
 from io import BytesIO
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from PIL import Image
 
@@ -15,6 +18,49 @@ from telegram.ext import (
 
 from config import BOT_TOKEN
 from database import init_database
+
+
+# =========================================================
+# RENDER HEALTH SERVER
+# =========================================================
+
+class HealthHandler(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header(
+            "Content-type",
+            "text/plain"
+        )
+        self.end_headers()
+
+        self.wfile.write(
+            b"Rose Guard is running!"
+        )
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_health_server():
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
+
+    server = HTTPServer(
+        ("0.0.0.0", port),
+        HealthHandler
+    )
+
+    print(
+        f"Health server running on port {port}"
+    )
+
+    server.serve_forever()
 
 
 # =========================================================
@@ -327,7 +373,6 @@ async def get_group_admins(
 
             return cached["admins"]
 
-
     try:
 
         administrators = await bot.get_chat_administrators(
@@ -535,14 +580,12 @@ async def ban_impersonator(
 
     username = user.username or "none"
 
-
     logger.warning(
         "IMPERSONATOR FOUND | ID=%s | NAME=%s | REASON=%s",
         user_id,
         full_name,
         reason,
     )
-
 
     # =====================================================
     # DELETE MESSAGE
@@ -564,7 +607,6 @@ async def ban_impersonator(
             user_id,
             error,
         )
-
 
     # =====================================================
     # BAN USER
@@ -589,7 +631,6 @@ async def ban_impersonator(
             user_id,
             error,
         )
-
 
     # =====================================================
     # ALERT
@@ -648,7 +689,6 @@ async def check_message(
 
     user_id = user.id
 
-
     # =====================================================
     # OFFICIAL ROSE
     # =====================================================
@@ -662,7 +702,6 @@ async def check_message(
 
         return
 
-
     # =====================================================
     # GET GROUP ADMINS
     # =====================================================
@@ -671,7 +710,6 @@ async def check_message(
         context.bot,
         chat.id
     )
-
 
     # =====================================================
     # REAL ADMIN = ALWAYS ALLOWED
@@ -687,13 +725,11 @@ async def check_message(
 
         return
 
-
     # =====================================================
     # ROSE NAME
     # =====================================================
 
     rose_name = is_rose_name(user)
-
 
     # =====================================================
     # ROSE PHOTO
@@ -712,7 +748,6 @@ async def check_message(
             current_hash,
             OFFICIAL_ROSE_HASHES
         )
-
 
     # =====================================================
     # FAKE ROSE
@@ -746,7 +781,6 @@ async def check_message(
 
         return
 
-
     # =====================================================
     # FAKE ADMIN / OWNER NAME
     # =====================================================
@@ -757,7 +791,6 @@ async def check_message(
             admins
         )
     )
-
 
     # =====================================================
     # FAKE ADMIN / OWNER PHOTO
@@ -775,7 +808,6 @@ async def check_message(
                 admins
             )
         )
-
 
     # =====================================================
     # FAKE ADMIN FOUND
@@ -797,7 +829,6 @@ async def check_message(
 
             reason = photo_reason
 
-
         await ban_impersonator(
             update,
             context,
@@ -805,7 +836,6 @@ async def check_message(
         )
 
         return
-
 
     # =====================================================
     # NORMAL USER
@@ -879,9 +909,28 @@ async def post_init(
     )
 
 
+# =========================================================
+# MAIN
+# =========================================================
+
 def main():
 
     init_database()
+
+    # =====================================================
+    # START RENDER HEALTH SERVER
+    # =====================================================
+
+    health_thread = threading.Thread(
+        target=start_health_server,
+        daemon=True
+    )
+
+    health_thread.start()
+
+    # =====================================================
+    # TELEGRAM BOT
+    # =====================================================
 
     app = (
         Application.builder()
@@ -889,7 +938,6 @@ def main():
         .post_init(post_init)
         .build()
     )
-
 
     app.add_handler(
         CommandHandler(
@@ -905,7 +953,6 @@ def main():
         )
     )
 
-
     # ALL messages
     app.add_handler(
         MessageHandler(
@@ -914,11 +961,9 @@ def main():
         )
     )
 
-
     app.add_error_handler(
         error_handler
     )
-
 
     print("================================")
     print("       ROSE GUARD STARTED")
@@ -926,9 +971,9 @@ def main():
     print("Official Rose ID: 609517172")
     print("Admin/Owner protection: ON")
     print("Rose protection: ON")
+    print("Render health server: ON")
     print("Bot is running...")
     print("Press CTRL+C to stop.")
-
 
     app.run_polling(
         allowed_updates=Update.ALL_TYPES
